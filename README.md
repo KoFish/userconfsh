@@ -9,6 +9,11 @@ can choose to generate a set of diffs that will be applied in the future when
 trying to install that particular file (when the repo has been updated for
 example.
 
+Usage
+-----
+
+    sh setup.sh [-h] [-d] [-c] [-r "repo.conf"] [-b "/home/user/confrepos"] [-f]
+
 repo.conf
 ---------
 

@@ -135,7 +135,7 @@ while read line; do
 				;;
 			2) ## Target path
 				STARTOFFILE=0
-				PATHSEG=`echo $line | sed -n "s/\([^:]\+[^\/]\)\/\?:/\1/p"`
+				PATHSEG=`echo $line | sed -n "s/\([^:]\+[^\/]\|~\)\/\?:/\1/p"`
 				if [ ! -z "$PATHSEG" ]; then
 					CURRTARGET=`expand_home "$PATHSEG"`
 				fi
