@@ -81,7 +81,7 @@ parse_cfg() {
 	case "$CFGKEY" in
 		"DIFF")
 			info "Setup diff directory: ${CFGVAL}"
-			DIFFDIR="${CONF_ROOT}/${CFGVAL}"
+			DIFFDIR="${CONF_ROOT}/${CFGVAL}/`whoami`@`hostname`"
 			;;
 		"BACKUP")
 			info "Setup backup directory: ${CFGVAL}"
