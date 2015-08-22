@@ -48,55 +48,115 @@ install() {
 	fi
 }
 
+classify_line() {
+	local line=$1
+	local comment=`echo $line | sed -n "s/^#/\0/p"`
+	if [ ! -z "$comment" ]; then return 0; fi
+	local cfg=`echo $line | sed -n "s/^[A-Z]\+=[^ \t]\+$/\0/p"`
+	if [ ! -z "$cfg" ]; then return 1; fi
+	local path0=`echo $line | sed -n "s/^[^ \t]/\0/p"`
+	if [ ! -z "$path0" ]; then return 2; fi
+	local path1=`echo $line | sed -n "s/^\t[^ \t]/\0/p"`
+	if [ ! -z "$path1" ]; then return 3; fi
+	local path2=`echo $line | sed -n "s/^\t\t[^ \t]/\0/p"`
+	if [ ! -z "$path2" ]; then return 4; fi
+	return -1
+}
+
+expand_home() {
+	local line=$1
+	local hashome=`echo "$line" | sed -n "s;^~\(/\|$\);${HOME}\1;p"`
+	if [ ! -z "$hashome" ]; then
+		CURRTARGET=$hashome
+	else
+		CURRTARGET=$line
+	fi
+	echo $CURRTARGET
+}
+
+parse_cfg() {
+	local line=$1
+	CFGKEY=`echo $line | sed -n "s/^\([A-Z]\+\)=[^ \t]\+$/\1/p"`
+	CFGVAL=`echo $line | sed -n "s/^[A-Z]\+=\(.\+\)$/\1/p"`
+	case "$CFGKEY" in
+		"DIFF")
+			info "Setup diff directory: ${CFGVAL}"
+			DIFFDIR="${CONF_ROOT}/${CFGVAL}"
+			;;
+		"BACKUP")
+			info "Setup backup directory: ${CFGVAL}"
+			BACKUPDIR="${CONF_ROOT}/${CFGVAL}"
+			;;
+		*)
+			;;
+	esac
+}
+
 oldIFS=$IFS
 IFS=`echo -e "\n"`
 CURRTARGET=
 STARTOFFILE=1
+WAITINGFORFILES=
+WAITINGFORMOREFILES=0
 while read line; do
-	CFGSEG=`echo $line | sed -n "s/\(^[A-Z]\+\)=[^ \t]\+$/\1/p"`
-	if [ ! -z "$CFGSEG" ]; then
-		#info "Found config line $CFGSEG"
-		if [ "$STARTOFFILE" -ne 1 ]; then
-			err "Settings can only be in the beginning of config files"
+	classify_line $line
+	LINETYPE=$?
+	if [ ! -z $WAITINGFORFILES ]; then
+		if [ $LINETYPE == 4 ]; then
+			FILESEG=`echo $line | sed -n "s/\t\t\(.\+\)/\1/p"`
+			trgpath="$CONF_ROOT/$WAITINGFORFILES"
+			install "$trgpath" "$FILESEG" "$CURRTARGET"
+			WAITINGFORMOREFILES=1
+		elif [ "$WAITINGFORMOREFILES" == 0 ]; then
+			dirpath="$CONF_ROOT/$WAITINGFORFILES"
+			newIFS=$IFS
+			IFS=$oldIFS
+			for file in `ls -A "$dirpath/"`; do
+				install "$dirpath" "$file" "$CURRTARGET"
+			done
+			IFS=$newIFS
+			WAITINGFORFILES=
 		else
-			CFGVAL=`echo $line | sed -n "s/^.\+=\([^ \t]\+\)$/\1/p"`
-			case "$CFGSEG" in
-				"DIFF")
-					DIFFDIR="${CONF_ROOT}/${CFGVAL}"
-					;;
-				"BACKUP")
-					BACKUPDIR="${CONF_ROOT}/${CFGVAL}"
-					;;
-				*) ;;
-			esac
+			WAITINGFORFILES=
+			WAITINGFORMOREFILES=0
 		fi
-	else
-		PATHSEG=`echo $line | sed -n "s/\([^:]\+[^\/]\)\/\?:/\1/p"`
-		if [ ! -z "$PATHSEG" ]; then
-			STARTOFFILE=0
-			HOMESEG=`echo "$PATHSEG" | sed -n "s;^~\(/\|$\);${HOME}\1;p"`
-			if [ ! -z "$HOMESEG" ]; then
-				CURRTARGET=$HOMESEG
-			else
-				CURRTARGET=$PATHSEG
-			fi
-		elif [ ! -z "$CURRTARGET" ]; then
-			DIRSEG=`echo $line | sed -n "s/\t\(.\+[^\/]\)\/$/\1/p"`
-			FILESEG=`echo $line | sed -n "s/\t\(.\+\)/\1/p"`
-			if [ ! -z "$DIRSEG" ]; then
+	fi
+	if [ -z "$WAITINGFORFILES" ]; then
+		classify_line $line
+		case $? in
+			0) ## Comment
+				;;
+			1) ## Configuration line
+				if [ "$STARTOFFILE" -ne 1 ]; then
+					err "Settings can only be in the beginning of config files"
+				else
+					parse_cfg $line
+				fi
+				;;
+			2) ## Target path
 				STARTOFFILE=0
-				dirpath="$CONF_ROOT/$DIRSEG"
-				newIFS=$IFS
-				IFS=$oldIFS
-				for file in `ls -A "$dirpath/"`; do
-					install "$dirpath" "$file" "$CURRTARGET"
-				done
-				IFS=$newIFS
-			elif [ ! -z "$FILESEG" ]; then
-				STARTOFFILE=0
-				install "$CONF_ROOT" "$FILESEG" "$CURRTARGET"
-			fi
-		fi
+				PATHSEG=`echo $line | sed -n "s/\([^:]\+[^\/]\)\/\?:/\1/p"`
+				if [ ! -z "$PATHSEG" ]; then
+					CURRTARGET=`expand_home "$PATHSEG"`
+				fi
+				;;
+			3) ## Source paths
+				if [ ! -z "$CURRTARGET" ]; then
+					STARTOFFILE=0
+					DIRSEG=`echo $line | sed -n "s/\t\(.\+[^\/]\)\/$/\1/p"`
+					FILESEG=`echo $line | sed -n "s/\t\(.\+\)$/\1/p"`
+					if [ ! -z "$DIRSEG" ]; then
+						WAITINGFORFILES="$DIRSEG"
+					elif [ ! -z "$FILESEG" ]; then
+						install "$CONF_ROOT" "$FILESEG" "$CURRTARGET"
+					fi
+				else
+					err "Incorrect configuration file syntax"
+					exit 10
+				fi
+				;;
+			*) ;;
+		esac
 	fi
 done < $CONF_PATH
 IFS=$oldIFS

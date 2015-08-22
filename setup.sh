@@ -9,26 +9,32 @@ HERE=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 DO_HELP=0
 DO_DIFFS=0
 DO_CLOBBER=0
-DO_FETCH=1
+DO_FETCH=0
+REPO_ROOT="${HERE}/repos"
+REPO_CONF="repo.conf"
 
-while getopts hdcfr: name; do
+while getopts hdcfr:b: name; do
 	case "$name" in
-		h)
+		h) ## Help
 			DO_HELP=1
 			;;
-		d)
+		d) ## Create new set of diffs
 			DO_DIFFS=1
 			;;
-		r)
-			REPOCONF="$OPTARG"
+		r) ## Change the name of the repo configuration file
+			REPO_CONF="$OPTARG"
 			;;
-		f)
-			DO_FETCH=0
+		b) ## Change the root of the cloned repositories
+			REPO_ROOT="$OPTARG"
+			;;
+		f) ## Do not fetch the git repo
+			DO_FETCH=1
 			;;
 		c)
 			DO_CLOBBER=1
 			;;
-		*) ;;
+		*)
+			;;
 	esac
 done
 
@@ -42,8 +48,10 @@ if [ "$DO_HELP" == 1 ]; then
 	echo "                     current files and the files to be installed."
 	echo "    -c             - Clobber; overwrite existing files."
 	echo "    -r             - Repo file; the file to read for repo configuration"
-	echo "    -f             - No fetch; do not try updating the repo if it has"
-	echo "                     been cloned."
+	echo "    -b             - Repo directory; the directory where to find the"
+	echo "                     repo config file and to place the repositories."
+	echo "    -f             - Fetch; try updating the repo even if it has been"
+	echo "                     cloned."
 	echo ""
 	echo "    -h             - Show this help text."
 	echo ""
@@ -55,22 +63,26 @@ fi
 ## Setup basic information for the script
 ##########################################¤######
 
-REPODIR="${HERE}/repos"
-if [ -z "$REPOCONF" ]; then
-	REPOCONF="${HERE}/repo.conf"
-fi
-if [ ! -f "$REPOCONF" ]; then
-	echo "${REPOCONF} is not a valid file."
+if [ ! -d "$REPO_ROOT" ]; then
+	echo "Repository root is not a valid directory"
 	exit -1
 fi
-REPONAME=`cat $REPOCONF | cut -f 1 -d" "`
-REPOURL=`cat $REPOCONF | cut -f 2 -d" "`
-if [ -z "$REPONAME" -o -z "$REPOURL" ]; then
-	echo "${REPOCONF} is not a valid repo configuration file."
+
+REPO_CONF_PATH="$REPO_ROOT/$REPO_CONF"
+LINE_COUNT=`wc -l "$REPO_CONF_PATH" | cut -f 1 -d" "`
+if [ ! -r "$REPO_CONF_PATH" -o "$LINE_COUNT" != "1" ]; then
+	echo "Repository configuration file, ${REPO_CONF_PATH} is not a valid file"
+	exit -1
 fi
 
-if [ "$DO_FETCH" -gt 0 -o ! -d "${REPODIR}/${REPONAME}" ]; then
-	sh ${HERE}/scripts/git.sh clone_repo "$REPODIR" "$REPONAME" "$REPOURL"
+REPONAME=`cat $REPO_CONF_PATH | cut -f 1 -d" "`
+REPOURL=`cat $REPO_CONF_PATH | cut -f 2 -d" "`
+if [ -z "$REPONAME" -o -z "$REPOURL" ]; then
+	echo "${REPO_CONF_PATH} is not a valid repo configuration file."
+fi
+
+if [ "$DO_FETCH" -gt 0 -o ! -d "${REPO_ROOT}/${REPONAME}" ]; then
+	sh ${HERE}/scripts/git.sh clone_repo "$REPO_ROOT" "$REPONAME" "$REPOURL"
 	if [ $? -ne 0 ]; then
 		echo "Could not clone configuration repository"
 	fi
@@ -78,7 +90,7 @@ fi
 
 export CLOBBER=$DO_CLOBBER
 
-sh ${HERE}/scripts/installer.sh "$REPODIR/$REPONAME" \
+sh ${HERE}/scripts/installer.sh "$REPO_ROOT/$REPONAME" \
 	"install.conf" "$DO_DIFFS"
 exit $?
 

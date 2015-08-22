@@ -4,8 +4,6 @@ UTIL_HERE="$(dirname $SCRIPT_HERE)/utils.d"
 
 source "${UTIL_HERE}/debug.sh"
 
-TMPDIR=`mktemp -d`
-
 ROOT=$1
 SRC=$2
 TARGET=$3
@@ -47,6 +45,7 @@ backup_target_file() {
 		if [ $? -ne 0 ]; then
 			info "Making backup of old file, $(gray)${target}$(color_reset)"
 			color_output
+			mkdir -p `dirname "$backup"`
 			mv -v --no-clobber --force "$target" "$backup"
 			local result=$?
 			color_reset
@@ -80,7 +79,7 @@ install_file() {
 		if [ -d "$target" ]; then
 			result=3
 		else
-			if [ -e "$target" ]; then
+			if [ -e "$target" -a "$CLOBBER" != 1 ]; then
 				diff "$src" "$target" &> /dev/null
 				if [ $? -eq 0 ]; then
 					warn "Source and target file do not differ, no copying"
@@ -88,10 +87,8 @@ install_file() {
 				fi
 			fi
 			if [ "$do_copy" == 1 ]; then
-				color_output
-				cp -v "$src" "$target"
+				cp "$src" "$target" > /dev/null
 				result=$?
-				color_reset
 				if [ $result -eq 0 ]; then
 					result=1
 				else
@@ -113,7 +110,7 @@ create_diff_file() {
 		return 5
 	fi
 	if [ -e "$curpath" ]; then
-		sh $SCRIPT_HERE/diffs.sh create "$curpath" "$srcfile" "$diffpath"
+		sh $SCRIPT_HERE/diffs.sh create "$curpath" "$srcpath" "$diffpath"
 		if [ $? -ne 0 ]; then
 			return 6
 		fi
@@ -144,22 +141,30 @@ replace() {
 		local backuppath=
 	fi
 
-	local tmppath="$TMPDIR/$SRC"
+	local tmppath=`mktemp --suffix="setupsh"`
 	local result=0
+	rm --force "$tmppath"
 
-	### Setup temporary directory
-	if [ -e "$tmppath" ]; then
-		warn "Remove old temp file $(gray)${tmppath}$(color_reset)"
-		color_output
-		rm -v "$tmppath"
-		color_reset
-	else
-		mkdir -p `dirname "$tmppath"` &> /dev/null
+	local newsrc="$srcpath"
+	if [ -r "$diffpath" ]; then
+		sh $SCRIPT_HERE/diffs.sh patch "$tmppath" "$srcpath" "$diffpath"
+		result=$?
+		if [ $result -eq 0 ]; then
+			newsrc="$tmppath"
+		else
+			return 3
+		fi
 	fi
 
 	if [ -e "$curpath" -a "$CLOBBER" != 1 ]; then
 		if [ "$create_diff" != 1 ]; then
-			err "Target file $(gray)${curpath}$(color_reset) already exists, aborting"
+			diff "$newsrc" "$curpath" &> /dev/null
+			result=$?
+			if [ $result -eq 1 ]; then
+				err "Aborting, Target file $(gray)${curpath}$(color_reset) already exists"
+			else
+				info "Target file $(gray)${curpath}$(color_reset) already exists and matches the new file"
+			fi
 			return 5
 		fi
 	fi
@@ -171,21 +176,12 @@ replace() {
 
 	replace_symlink "$curpath"
 
-	local newsrc="$srcpath"
 	if [ "$create_diff" == 1 ]; then
 		create_diff_file "$curpath" "$srcpath" "$diffpath"
 		if [ $? -ne 0 ]; then
 			return 5
 		fi
 		return 0
-	elif [ -r "$diffpath" ]; then
-		sh $SCRIPT_HERE/diffs.sh patch "$tmppath" "$srcpath" "$diffpath"
-		result=$?
-		if [ $result -eq 0 ]; then
-			newsrc="$tmppath"
-		else
-			return 3
-		fi
 	fi
 
 	if [ ! -z "$backuppath" ]; then

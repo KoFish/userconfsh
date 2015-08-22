@@ -13,13 +13,12 @@ create_diff() {
 	local diff=$3
 	local tmp=`mktemp`
 
-	if [ -e "$diff" -a -z "${CLOBBER}" ]; then
+	if [ -e "$diff" -a "${CLOBBER}" != 1 ]; then
 		warn "Diff file $(gray)${diff}$(color_reset) already exists"
 		return 2
 	fi
 
-	info "Diff new=$new current=$current"
-
+	rm --force "$tmp"
 	diff --unified "$new" "$current" > "$tmp"
 	local result=$?
 	if [ $result -eq 1 ]; then
@@ -31,27 +30,30 @@ create_diff() {
 		return 0
 	else
 		# There where no difference between the files
-		rm --force "$diff"
+		rm --force "$tmp"
 		return 1
 	fi
 }
 
 patch_file() {
-	local current=$1
-	local new=$2
+	local output=$1
+	local input=$2
 	local diff=$3
 
-	if [ -e "$current" -a -z "${CLOBBER}" ]; then
-		warn "File $(gray)${current}$(color_reset) already exists"
+	if [ -e "$output" -a "${CLOBBER}" != 1 ]; then
+		warn "File $(gray)${output}$(color_reset) already exists"
 		return 2
 	fi
 
 	if [ -e "$diff" ]; then
 		color_output
-		patch -p1 "$new" "$diff" -o "$current"
+		patch -p1 "$input" "$diff" -o "$output"
 		local result=$?
 		color_reset
 		if [ $result -ne 0 ]; then
+			if [ -e "$output" ]; then
+				rm "$output"
+			fi
 			warn "Could not apply diff!"
 		else
 			return 0
@@ -61,15 +63,16 @@ patch_file() {
 }
 
 COMMAND=$1
-CURR="$2"
-NEW="$3"
-DIFF="$4"
+           #  Patch |  Diff  |
+CURR="$2"  # Output | Input  |
+SRC="$3"   # Input  | Output |
+DIFF="$4"  # Input  | Output |
 case "$COMMAND" in
 	create)
-		create_diff "$CURR" "$NEW" "$DIFF"
+		create_diff "$CURR" "$SRC" "$DIFF"
 		;;
 	patch)
-		patch_file "$CURR" "$NEW" "$DIFF"
+		patch_file "$CURR" "$SRC" "$DIFF"
 		;;
 	*) ;;
 esac
