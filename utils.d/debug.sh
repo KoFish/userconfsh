@@ -4,15 +4,15 @@ UTIL_HERE=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source "${UTIL_HERE}/colors.sh"
 
 info() {
-  >&2 echo -e "$(green) --$(reset) " $*
+  >&2 echo -e "$(green) --$(color_reset) " $*
 }
 
 warn() {
-  >&2 echo -e "$(yellow) --$(reset) " $*
+  >&2 echo -e "$(yellow) --$(color_reset) " $*
 }
 
 err() {
-  >&2 echo -e "$(red) EE$(reset) " $*
+  >&2 echo -e "$(red) EE$(color_reset) " $*
 }
 
 color_output() {

@@ -20,7 +20,7 @@ red() {
   echo -ne "\033[31m"
 }
 
-reset() {
+color_reset() {
   echo -ne "\033[0m"
 }
 
