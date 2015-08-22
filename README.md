@@ -1,13 +1,18 @@
 userconfsh
 ==========
 
-This is a collection of shell scripts that takes a `repo configuration file`,
-which contains a git-url to a repo with a `install.conf` file. Based on that
-install-file it then puts the files in the repo at specified places from the
-users root catalogue. If the file it tries to install already exists the user
-can choose to generate a set of diffs that will be applied in the future when
-trying to install that particular file (when the repo has been updated for
-example.
+This tool is created to making it easier to manage and use git repositories that
+contains "dot files" such as `.xinit`, `.bashrc`, `.nvimrc` and so on. By using
+userconfsh you can choose which files to install and apply diffs to each file as
+you install them.
+
+To be more technical this is a collection of shell scripts that takes a "repo
+configuration file", which contains a git-url to a repo with a `install.conf`
+file. Based on that install-file it then puts the files in the repo at specified
+places from the users root catalogue. If the file it tries to install already
+exists the user can choose to generate a set of diffs that will be applied in
+the future when trying to install that particular file (when the repo has been
+updated for example.
 
 Usage
 -----
